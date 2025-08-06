@@ -1,1 +1,4 @@
 # bot-telegram
+
+.env
+TELEGRAM_BOT_TOKEN

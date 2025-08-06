@@ -53,7 +53,6 @@ func main() {
 	}
 
 	// Inicializa el bot de Telegram
-	// No uses 'var err' aquí, ya que 'err' ya fue declarado arriba con 'godotenv.Load()'
 	bot, err = tgbotapi.NewBotAPI(token)
 	if err != nil {
 		log.Fatal(err)
@@ -62,8 +61,16 @@ func main() {
 	log.Printf("Bot autorizado en la cuenta %s", bot.Self.UserName)
 
 	router := gin.Default()
+
+	// --- AÑADIDO: Ruta para el "Hello World" en la raíz ---
+	router.GET("/", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{
+			"message": "Hello World from your Go server!",
+		})
+	})
+	// ---------------------------------------------------
 	
-	// Define la ruta del webhook. Usa solo la ruta sin el token para mayor claridad.
+	// Define la ruta del webhook.
 	router.POST("/webhook", handleTelegramWebhook)
 
 	// Inicia el servidor
@@ -94,7 +101,7 @@ func handleTelegramWebhook(c *gin.Context) {
 		go takeAndSendScreenshot(url, update.Message.Chat.ID)
 	}
 
-	// Responde al webhook de Telegram. Esto es vital para que Telegram sepa que el mensaje fue recibido.
+	// Responde al webhook de Telegram.
 	c.JSON(http.StatusOK, gin.H{"status": "ok"})
 }
 
