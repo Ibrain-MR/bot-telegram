@@ -6,21 +6,10 @@ import (
 	"net/http"
 	"os"
 	"strings"
-	"time"
 
-	"github.com/chromedp/chromedp"
 	"github.com/gin-gonic/gin"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"github.com/joho/godotenv"
-)
-
-// Constantes y variables globales
-const (
-	screenshotFileName = "screenshot.png"
-)
-
-var (
-	bot *tgbotapi.BotAPI
 )
 
 // Estructuras para manejar el webhook de Telegram
@@ -38,8 +27,13 @@ type Chat struct {
 	ID int64 `json:"id"`
 }
 
-// Función principal
-func main() {
+var (
+	bot    *tgbotapi.BotAPI
+	router *gin.Engine
+)
+
+// init() se ejecuta una vez cuando el programa inicia
+func init() {
 	// Carga las variables de entorno desde el archivo .env
 	err := godotenv.Load()
 	if err != nil {
@@ -60,24 +54,26 @@ func main() {
 
 	log.Printf("Bot autorizado en la cuenta %s", bot.Self.UserName)
 
-	router := gin.Default()
+	// Inicializa el router de Gin
+	router = gin.Default()
 
-	// --- AÑADIDO: Ruta para el "Hello World" en la raíz ---
+	// Ruta para el "Hello World" en la raíz
 	router.GET("/", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{
-			"message": "Hello World from your Go server!",
+			"message": "Hello World from your Go Serverless Function!",
 		})
 	})
-	// ---------------------------------------------------
-	
+
 	// Define la ruta del webhook.
 	router.POST("/webhook", handleTelegramWebhook)
-
-	// Inicia el servidor
-	router.Run(":8080")
 }
 
-// Handler para el webhook
+// Handler es la función que Vercel ejecutará
+func Handler(w http.ResponseWriter, r *http.Request) {
+	router.ServeHTTP(w, r)
+}
+
+// handleTelegramWebhook es el handler para los mensajes de Telegram
 func handleTelegramWebhook(c *gin.Context) {
 	var update TelegramUpdate
 
@@ -93,61 +89,17 @@ func handleTelegramWebhook(c *gin.Context) {
 	// Verifica si el mensaje contiene un enlace
 	url := update.Message.Text
 	if strings.HasPrefix(url, "http://") || strings.HasPrefix(url, "https://") {
-		// Envía una confirmación al usuario de que se está procesando
-		msg := tgbotapi.NewMessage(update.Message.Chat.ID, "¡Enlace detectado! Tomando una captura de pantalla...")
+		// Envía el mismo enlace de vuelta al usuario
+		msg := tgbotapi.NewMessage(update.Message.Chat.ID, "¡Enlace recibido! Aquí está el enlace que enviaste: " + url)
 		bot.Send(msg)
-		
-		// Inicia la captura de pantalla en una goroutine para no bloquear el webhook
-		go takeAndSendScreenshot(url, update.Message.Chat.ID)
+	} else {
+		// Maneja mensajes que no son enlaces, si es necesario
+		msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Por favor, envía un enlace que comience con http:// o https://")
+		bot.Send(msg)
 	}
 
 	// Responde al webhook de Telegram.
 	c.JSON(http.StatusOK, gin.H{"status": "ok"})
 }
 
-// takeAndSendScreenshot toma la captura y la envía
-func takeAndSendScreenshot(urlstr string, chatID int64) {
-	// Elimina cualquier archivo de captura anterior para evitar conflictos
-	os.Remove(screenshotFileName)
-
-	// Contexto para chromedp
-	ctx, cancel := chromedp.NewContext(context.Background())
-	defer cancel()
-
-	var buf []byte
-	if err := chromedp.Run(ctx,
-		// Define el tamaño de la ventana del navegador
-		chromedp.EmulateViewport(1920, 1080),
-		// Navega a la URL
-		chromedp.Navigate(urlstr),
-		// Espera 2 segundos para que la página cargue completamente
-		chromedp.Sleep(2*time.Second),
-		// Toma una captura de pantalla completa
-		chromedp.FullScreenshot(&buf, 90),
-	); err != nil {
-		log.Printf("Error al tomar la captura de pantalla: %v", err)
-		errMsg := tgbotapi.NewMessage(chatID, "Ocurrió un error al tomar la captura de pantalla.")
-		bot.Send(errMsg)
-		return
-	}
-
-	// Guarda el buffer de la imagen en un archivo
-	if err := os.WriteFile(screenshotFileName, buf, 0644); err != nil {
-		log.Printf("Error al guardar la captura de pantalla: %v", err)
-		errMsg := tgbotapi.NewMessage(chatID, "Ocurrió un error al guardar la captura de pantalla.")
-		bot.Send(errMsg)
-		return
-	}
-
-	// Crea un objeto para enviar la foto
-	photoMsg := tgbotapi.NewPhoto(chatID, tgbotapi.FilePath(screenshotFileName))
-	photoMsg.Caption = "Captura de pantalla de la URL."
-
-	// Envía la foto al chat de Telegram
-	if _, err := bot.Send(photoMsg); err != nil {
-		log.Printf("Error al enviar la foto a Telegram: %v", err)
-	}
-	
-	// Limpia el archivo de captura una vez enviado
-	os.Remove(screenshotFileName)
-}
+// Las funciones de chromedp y screenshot han sido eliminadas para simplificar el código.
