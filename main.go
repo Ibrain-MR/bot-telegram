@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"log"
 	"net/http"
 	"os"
@@ -28,13 +27,13 @@ type Chat struct {
 }
 
 var (
-	bot    *tgbotapi.BotAPI
-	router *gin.Engine
+	bot *tgbotapi.BotAPI
 )
 
-// init() se ejecuta una vez cuando el programa inicia
-func init() {
+// main() es el punto de entrada para un servidor tradicional
+func main() {
 	// Carga las variables de entorno desde el archivo .env
+	// Esto es útil para desarrollo local. En Railway, las variables se inyectan directamente.
 	err := godotenv.Load()
 	if err != nil {
 		log.Println("Advertencia: No se pudo cargar el archivo .env. Asegúrate de que las variables de entorno están configuradas manualmente.")
@@ -55,22 +54,27 @@ func init() {
 	log.Printf("Bot autorizado en la cuenta %s", bot.Self.UserName)
 
 	// Inicializa el router de Gin
-	router = gin.Default()
+	router := gin.Default()
 
 	// Ruta para el "Hello World" en la raíz
 	router.GET("/", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{
-			"message": "Hello World from your Go Serverless Function!",
+			"message": "Hello World from your Go Bot!",
 		})
 	})
 
 	// Define la ruta del webhook.
 	router.POST("/webhook", handleTelegramWebhook)
-}
 
-// Handler es la función que Vercel ejecutará
-func Handler(w http.ResponseWriter, r *http.Request) {
-	router.ServeHTTP(w, r)
+	// Obtén el puerto de la variable de entorno PORT (usado por Railway)
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080" // Puerto por defecto si no se especifica
+	}
+
+	log.Printf("Iniciando servidor en el puerto :%s", port)
+	// Inicia el servidor de Gin, escuchando en el puerto especificado por la variable de entorno
+	log.Fatal(router.Run(":" + port))
 }
 
 // handleTelegramWebhook es el handler para los mensajes de Telegram
@@ -90,7 +94,7 @@ func handleTelegramWebhook(c *gin.Context) {
 	url := update.Message.Text
 	if strings.HasPrefix(url, "http://") || strings.HasPrefix(url, "https://") {
 		// Envía el mismo enlace de vuelta al usuario
-		msg := tgbotapi.NewMessage(update.Message.Chat.ID, "¡Enlace recibido! Aquí está el enlace que enviaste: " + url)
+		msg := tgbotapi.NewMessage(update.Message.Chat.ID, "¡Enlace recibido! Aquí está el enlace que enviaste: "+url)
 		bot.Send(msg)
 	} else {
 		// Maneja mensajes que no son enlaces, si es necesario
@@ -101,5 +105,3 @@ func handleTelegramWebhook(c *gin.Context) {
 	// Responde al webhook de Telegram.
 	c.JSON(http.StatusOK, gin.H{"status": "ok"})
 }
-
-// Las funciones de chromedp y screenshot han sido eliminadas para simplificar el código.
